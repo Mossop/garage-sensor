@@ -1,8 +1,11 @@
 [target.riscv32imac-unknown-none-elf]
+# runner = "espflash flash --monitor -L defmt"
 runner = "probe-rs run --chip=esp32c6"
 
 [env]
-DEFMT_LOG = "info"
+DEFMT_LOG = "info,garage_sensor=trace"
+ESP_LOG = "trace"
+ESP_WIFI_CSI_ENABLE = "true"
 
 [build]
 rustflags = [

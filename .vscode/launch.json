@@ -7,7 +7,7 @@
     {
       "type": "probe-rs-debug",
       "request": "launch",
-      "name": "probe-rs Test",
+      "name": "Launch",
       "cwd": "${workspaceFolder}",
       "connectUnderReset": true,
       "chip": "esp32c6",
@@ -18,7 +18,8 @@
       "coreConfigs": [
         {
           "coreIndex": 0,
-          "programBinary": "./target/riscv32imac-unknown-none-elf/debug/${workspaceFolderBasename}"
+          "programBinary": "./target/riscv32imac-unknown-none-elf/debug/${workspaceFolderBasename}",
+          "rttEnabled": true
         }
       ]
     }

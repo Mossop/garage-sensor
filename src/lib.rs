@@ -1,28 +1,21 @@
 #![no_std]
 
-use defmt::info;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
-use esp_hal::prelude::*;
 
-use crate::led::spawn_led;
+#[cfg_attr(feature = "esp32c6", path = "board/esp32c6.rs")]
+mod board;
 
-mod led;
+use board::Board;
 
 pub async fn main(spawner: Spawner) {
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
-
-    let timg0 = esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
-    esp_hal_embassy::init(timg0.timer0);
-    info!("Embassy initialized!");
-
-    spawn_led(&spawner, peripherals.LEDC, peripherals.GPIO15);
+    let board = Board::init(&spawner, env!("GARAGE_SSID"), env!("GARAGE_PASSWORD")).await;
+    board.wait_for_network().await;
 
     loop {
-        Timer::after_secs(1).await;
+        board.set_led(true).await;
+        Timer::after_millis(1000).await;
+        board.set_led(false).await;
+        Timer::after_millis(100).await;
     }
 }
