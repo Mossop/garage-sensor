@@ -2,6 +2,7 @@
 use defmt::trace;
 use defmt::{error, warn};
 use embassy_executor::Spawner;
+use embassy_futures::select::{select, Either};
 use embassy_net::{Runner, Stack, StackResources};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::Timer;
@@ -127,10 +128,21 @@ async fn net_task(mut runner: Runner<'static, WifiDevice<'static, WifiStaDevice>
 
 #[embassy_executor::task]
 async fn motion_task(mut motion: Input<'static, AnyPin>) {
+    let mut state = motion.is_high();
+
     loop {
         motion.wait_for_any_edge().await;
 
-        MOTION_STATE.signal(motion.is_high());
+        while let Either::First(_) =
+            select(motion.wait_for_any_edge(), Timer::after_millis(50)).await
+        {}
+
+        let new_state = motion.is_high();
+
+        if new_state != state {
+            state = new_state;
+            MOTION_STATE.signal(new_state);
+        }
     }
 }
 
@@ -227,20 +239,8 @@ impl Motion {
     }
 
     pub async fn wait(&mut self) -> BinarySensorState {
-        let current_state = self.state;
-        loop {
-            let mut new_state = MOTION_STATE.wait().await;
-            Timer::after_millis(50).await;
-
-            if let Some(st) = MOTION_STATE.try_take() {
-                new_state = st;
-            }
-
-            if new_state != current_state {
-                self.state = new_state;
-                return new_state.into();
-            }
-        }
+        self.state = MOTION_STATE.wait().await;
+        self.state.into()
     }
 }
 

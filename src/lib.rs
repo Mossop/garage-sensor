@@ -7,7 +7,7 @@ use embassy_executor::Spawner;
 mod board;
 
 use board::Board;
-use embassy_futures::select::select3;
+use embassy_futures::select::{select, select3, Either};
 use embassy_time::Timer;
 use mcutie::{
     homeassistant::{
@@ -87,10 +87,11 @@ async fn motion_sensor(mut motion: Motion) {
     let _ = MOTION_SENSOR.publish_state(motion.state()).await;
 
     loop {
-        let new_state = motion.wait().await;
-        debug!("Motion changed state");
+        if let Either::First(_) = select(motion.wait(), Timer::after_secs(60)).await {
+            debug!("Motion changed state");
+        }
 
-        let _ = MOTION_SENSOR.publish_state(new_state).await;
+        let _ = MOTION_SENSOR.publish_state(motion.state()).await;
     }
 }
 
@@ -111,23 +112,36 @@ async fn temp_sensor(mut sensor: TempSensor) {
 }
 
 async fn discovery(receiver: McutieReceiver, led: Led) {
-    loop {
-        let message = receiver.receive().await;
+    let mut next_poll = 60 * 5;
 
-        match message {
-            MqttMessage::Connected | MqttMessage::HomeAssistantOnline => {
+    loop {
+        match select(receiver.receive(), Timer::after_secs(next_poll)).await {
+            Either::First(MqttMessage::Connected)
+            | Either::First(MqttMessage::HomeAssistantOnline) => {
                 led.set(true).await;
+
+                let _ = MOTION_SENSOR.publish_discovery().await;
+                let _ = TEMPERATURE_SENSOR.publish_discovery().await;
+                let _ = HUMIDITY_SENSOR.publish_discovery().await;
 
                 let _ = DEVICE_AVAILABILITY_TOPIC
                     .with_bytes(AvailabilityState::Online)
                     .publish()
                     .await;
-                let _ = MOTION_SENSOR.publish_discovery().await;
-                let _ = TEMPERATURE_SENSOR.publish_discovery().await;
-                let _ = HUMIDITY_SENSOR.publish_discovery().await;
+
+                // Update availability quickly to ensure home assistant gets it.
+                next_poll = 10;
             }
-            MqttMessage::Disconnected => {
+            Either::First(MqttMessage::Disconnected) => {
                 led.set(false).await;
+            }
+            Either::Second(_) => {
+                let _ = DEVICE_AVAILABILITY_TOPIC
+                    .with_bytes(AvailabilityState::Online)
+                    .publish()
+                    .await;
+
+                next_poll = 60 * 5;
             }
             _ => {}
         }
@@ -136,6 +150,9 @@ async fn discovery(receiver: McutieReceiver, led: Led) {
 
 pub async fn main(spawner: Spawner) {
     let board = Board::init(&spawner, env!("GARAGE_SSID"), env!("GARAGE_PASSWORD")).await;
+
+    board.led.set(false).await;
+
     let (receiver, mqtt_runner) =
         McutieBuilder::new(board.network, "garage", env!("GARAGE_BROKER"))
             .with_last_will(DEVICE_AVAILABILITY_TOPIC.with_bytes(AvailabilityState::Offline))
