@@ -3,7 +3,7 @@
 runner = "probe-rs run --chip=esp32c6"
 
 [env]
-DEFMT_LOG = "info,garage_sensor=trace,mcutie=debug"
+DEFMT_LOG = "info,garage_sensor=trace,mcutie=trace"
 ESP_LOG = "trace"
 ESP_WIFI_CSI_ENABLE = "true"
 

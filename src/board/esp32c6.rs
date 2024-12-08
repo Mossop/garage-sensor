@@ -14,6 +14,7 @@ use esp_hal::{
     ledc::{channel, timer, LSGlobalClkSource, Ledc, LowSpeed},
     peripherals::LEDC,
     prelude::*,
+    reset::software_reset,
     rng::Rng,
     Async,
 };
@@ -27,6 +28,8 @@ use esp_wifi::{
 use mcutie::homeassistant::binary_sensor::BinarySensorState;
 use rand::RngCore;
 use static_cell::StaticCell;
+
+const WIFI_CONNECTION_TIMEOUT: u64 = 5 * 60;
 
 const HTU31D_ADDRESS: u8 = 0x40;
 const HTU32D_CMD_HEATER_OFF: u8 = 0x02;
@@ -89,18 +92,12 @@ async fn led_task(ledc_peripheral: LEDC, gpio: GpioPin<15>) {
     }
 }
 
-#[embassy_executor::task]
-async fn connection(
-    mut controller: WifiController<'static>,
+async fn connect(
+    controller: &mut WifiController<'static>,
     ssid: &'static str,
     password: Option<&'static str>,
 ) {
     loop {
-        if wifi::wifi_state() == WifiState::StaConnected {
-            controller.wait_for_event(WifiEvent::StaDisconnected).await;
-            Timer::after_millis(500).await;
-        }
-
         if !matches!(controller.is_started(), Ok(true)) {
             let (auth_method, maybe_password) = if let Some(password) = password {
                 (AuthMethod::default(), password.try_into().unwrap())
@@ -119,11 +116,38 @@ async fn connection(
         }
 
         match controller.connect_async().await {
-            Ok(_) => trace!("Wifi connected!"),
+            Ok(_) => {
+                trace!("Wifi connected!");
+                return;
+            }
             Err(e) => {
                 trace!("Failed to connect to wifi: {:?}", e);
                 Timer::after_millis(500).await
             }
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn connection(
+    mut controller: WifiController<'static>,
+    ssid: &'static str,
+    password: Option<&'static str>,
+) {
+    loop {
+        if wifi::wifi_state() == WifiState::StaConnected {
+            controller.wait_for_event(WifiEvent::StaDisconnected).await;
+            Timer::after_millis(500).await;
+        }
+
+        if let Either::Second(_) = select(
+            connect(&mut controller, ssid, password),
+            Timer::after_secs(WIFI_CONNECTION_TIMEOUT),
+        )
+        .await
+        {
+            warn!("Unable to connect to wifi in a reasonable time, rebooting.");
+            software_reset();
         }
     }
 }
