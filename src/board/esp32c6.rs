@@ -19,8 +19,8 @@ use esp_hal::{
 };
 use esp_wifi::{
     wifi::{
-        self, ClientConfiguration, Configuration, WifiController, WifiDevice, WifiEvent,
-        WifiStaDevice, WifiState,
+        self, AuthMethod, ClientConfiguration, Configuration, WifiController, WifiDevice,
+        WifiEvent, WifiStaDevice, WifiState,
     },
     EspWifiController,
 };
@@ -93,7 +93,7 @@ async fn led_task(ledc_peripheral: LEDC, gpio: GpioPin<15>) {
 async fn connection(
     mut controller: WifiController<'static>,
     ssid: &'static str,
-    password: &'static str,
+    password: Option<&'static str>,
 ) {
     loop {
         if wifi::wifi_state() == WifiState::StaConnected {
@@ -102,9 +102,16 @@ async fn connection(
         }
 
         if !matches!(controller.is_started(), Ok(true)) {
+            let (auth_method, maybe_password) = if let Some(password) = password {
+                (AuthMethod::default(), password.try_into().unwrap())
+            } else {
+                (AuthMethod::None, Default::default())
+            };
+
             let client_config = Configuration::Client(ClientConfiguration {
                 ssid: ssid.try_into().unwrap(),
-                password: password.try_into().unwrap(),
+                auth_method,
+                password: maybe_password,
                 ..Default::default()
             });
             controller.set_configuration(&client_config).unwrap();
@@ -252,7 +259,11 @@ pub struct Board {
 }
 
 impl Board {
-    pub async fn init(spawner: &Spawner, ssid: &'static str, password: &'static str) -> Self {
+    pub async fn init(
+        spawner: &Spawner,
+        ssid: &'static str,
+        password: Option<&'static str>,
+    ) -> Self {
         let peripherals = esp_hal::init({
             let mut config = esp_hal::Config::default();
             config.cpu_clock = CpuClock::max();

@@ -149,7 +149,12 @@ async fn discovery(receiver: McutieReceiver, led: Led) {
 }
 
 pub async fn main(spawner: Spawner) {
-    let board = Board::init(&spawner, env!("GARAGE_SSID"), env!("GARAGE_PASSWORD")).await;
+    let board = Board::init(
+        &spawner,
+        env!("GARAGE_SSID"),
+        option_env!("GARAGE_PASSWORD"),
+    )
+    .await;
 
     board.led.set(false).await;
 
