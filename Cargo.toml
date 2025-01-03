@@ -15,6 +15,7 @@ esp32c6 = [
     "esp-hal/esp32c6",
     "esp-hal-embassy/esp32c6",
     "esp-wifi/esp32c6",
+    "dep:fugit",
 ]
 defmt = [
     "dep:defmt",
@@ -33,7 +34,7 @@ esp-backtrace = { version = "0.14.2", optional = true, features = [
     "exception-handler",
     "panic-handler",
 ] }
-esp-hal = { version = "0.22.0", optional = true }
+esp-hal = { version = "0.22.0", optional = true, features = ["unstable"] }
 defmt = { version = "0.3.10", optional = true }
 defmt-rtt = { version = "0.4.1", optional = true }
 embassy-executor = { version = "0.6.3", features = ["task-arena-size-81920"] }
@@ -51,6 +52,7 @@ embassy-net = { version = "0.5.0", features = [
 esp-wifi = { version = "0.11.0", optional = true, features = ["wifi"] }
 rand = { version = "0.8.5", default-features = false }
 esp-alloc = { version = "0.5.0", optional = true }
+fugit = { version = "0.3.7", optional = true }
 mcutie = "0.2.0"
 embassy-futures = "0.1.1"
 
@@ -73,3 +75,10 @@ opt-level = 3
 
 [profile.release.package.esp-wifi]
 opt-level = 3
+
+[patch.crates-io]
+esp-backtrace = { git = "https://github.com/esp-rs/esp-hal.git", rev = "1f929af377e6713dce6ecf88fdd0ada4f696cebd" }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal.git", rev = "1f929af377e6713dce6ecf88fdd0ada4f696cebd" }
+esp-wifi = { git = "https://github.com/esp-rs/esp-hal.git", rev = "1f929af377e6713dce6ecf88fdd0ada4f696cebd" }
+esp-alloc = { git = "https://github.com/esp-rs/esp-hal.git", rev = "1f929af377e6713dce6ecf88fdd0ada4f696cebd" }
+esp-hal-embassy = { git = "https://github.com/esp-rs/esp-hal.git", rev = "1f929af377e6713dce6ecf88fdd0ada4f696cebd" }

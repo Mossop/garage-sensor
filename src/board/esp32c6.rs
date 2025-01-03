@@ -11,9 +11,12 @@ use esp_hal::{
     clock::CpuClock,
     gpio::{AnyPin, GpioPin, Input, Pull},
     i2c::master::{Config, I2c},
-    ledc::{channel, timer, LSGlobalClkSource, Ledc, LowSpeed},
+    ledc::{
+        channel::{self, ChannelIFace},
+        timer::{self, TimerIFace},
+        LSGlobalClkSource, Ledc, LowSpeed,
+    },
     peripherals::LEDC,
-    prelude::*,
     reset::software_reset,
     rng::Rng,
     Async,
@@ -25,6 +28,7 @@ use esp_wifi::{
     },
     EspWifiController,
 };
+use fugit::RateExtU32;
 use mcutie::homeassistant::binary_sensor::BinarySensorState;
 use rand::RngCore;
 use static_cell::StaticCell;
@@ -323,16 +327,14 @@ impl Board {
         spawner.spawn(connection(controller, ssid, password)).ok();
         spawner.spawn(net_task(runner)).ok();
 
-        let i2c = I2c::new(
-            peripherals.I2C0,
-            Config {
-                frequency: 70.kHz(),
-                timeout: Some(10),
-            },
-        )
-        .with_sda(peripherals.GPIO22)
-        .with_scl(peripherals.GPIO23)
-        .into_async();
+        let mut i2c_config = Config::default();
+        i2c_config.frequency = 70.kHz();
+
+        let i2c = I2c::new(peripherals.I2C0, i2c_config)
+            .unwrap()
+            .with_sda(peripherals.GPIO22)
+            .with_scl(peripherals.GPIO23)
+            .into_async();
 
         let temp = TempSensor::new(i2c).await;
 
